@@ -1,0 +1,333 @@
+---
+title: "Project 07"
+author: "Tobechi Dimkpa"
+date: "March 24, 2025"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(gtsummary)
+library(broom)
+library(kableExtra)
+```
+
+
+## Question 1
+
+Understanding the relationship of demographic factors and alcohol consumption on cirrhosis death rates. Dataset containing population, drinking data, and cirrhosis death rates for 46 US states in the `data/wine_data.txt` file. The variables of interest are:
+
+- `urban_pop` the percentage of urban population in the state
+
+- `late_births` a measure of the number of births to women between 45 to 49
+
+- `wine_consumption` the consumption of wine per capita
+
+- `liquor_consumption` the consumption of hard liquor per capita
+
+- `cirrhosis_death` the death rate from cirrhosis (outcome)
+
+### a)
+
+Read the data 
+
+
+```{r}
+wine_data <- read_table2("data/wine_data.txt") %>%
+  select(-one)
+
+# `read_table2()` is needed because there are several spaces between the columns
+```
+
+### b)
+
+Create scatterplots that display the relationship between each continuous variable (`urban_pop`, `late_births`, `wine_consumption`, and `liquor_consumption`) with the dependent variable of interest `cirrhosis_death`.
+
+
+```{r}
+ggplot(data = wine_data) +
+  geom_point(aes(x= urban_pop, y=cirrhosis_death), color = "cornflowerblue")+
+  labs(title = "Percentage of Urban Population vs Cirrhosis Deaths", x = "Urban Population", y= "Cirrhosis Deaths")+
+  theme_bw()
+
+ggplot(data = wine_data) +
+  geom_point(aes(x= late_births, y=cirrhosis_death), color = "darkslategray")+
+  labs(title = "Number of Late Births vs Cirrhosis Deaths", x = "Late births", y= "Cirrhosis Deaths")+
+  theme_bw()
+
+ggplot(data = wine_data) +
+  geom_point(aes(x= wine_consumption, y=cirrhosis_death), color = "darkseagreen4")+
+  labs(title = "Wine Consumption per capita vs Cirrhosis Deaths", x = "Wine consumption", y= "Cirrhosis Deaths")+
+  theme_bw()
+
+ggplot(data = wine_data) +
+  geom_point(aes(x= liquor_consumption, y=cirrhosis_death), color = "lemonchiffon4")+
+  labs(title = "Liquor Consumption per capita vs Cirrhosis Deaths", x = "Liquor consumption", y= "Cirrhosis Deaths")+
+  theme_bw()
+```
+Wine and liquor consumption have a linear relationship with cirrhosis deaths
+
+
+### c)
+
+Fit a series of simple regressions with `cirrhosis_death` as an outcome and each continuous variable as a sole predictor. 
+
+
+```{r}
+fit_regression <- function(df, predictor){
+  s <- str_c("cirrhosis_death ~ ", predictor)
+  s_form <- as.formula(s)
+  mod <- lm(s_form, data = df)
+  return(mod)
+}
+
+wine_data %>%
+  fit_regression("urban_pop") %>%
+  tbl_regression()
+
+wine_data %>%
+  fit_regression("late_births") %>%
+  tbl_regression()
+
+wine_data %>%
+  fit_regression("wine_consumption") %>%
+  tbl_regression()
+
+wine_data %>%
+  fit_regression("liquor_consumption") %>%
+  tbl_regression()
+```
+All continuous variables above were significantly associated with cirrhosis deaths (p <0.001 for all, CI not including 0)
+
+
+### d)
+
+Fully adjusted linear model
+
+
+```{r, results='asis'}
+multiple_lm <- lm(cirrhosis_death ~ urban_pop + late_births + wine_consumption + liquor_consumption, data = wine_data) %>%
+  tbl_regression(label = list(urban_pop ~ "Urban Population",
+                              late_births ~ "Late Births",
+                              wine_consumption = "Wine Consumption",
+                              liquor_consumption = "Liquor Consumption"),
+                 intercept = TRUE)
+print(multiple_lm)
+```
+Wine consumption is significantly associated with Cirrhosis deaths in the fully adjusted model. 
+Our model estimates that for every 1 unit increase in wine consumption per capita, cirrhosis deaths increases by 1.9 units, on average, after adjusting for urban population, late births and liquor consumption.
+
+
+## Guinea Pig Weights
+
+ small data file of the average weight (in pounds) for two strains of guinea pig from a series of years in the early 20th century. This data is stored in `data/gpig_dat.csv` and has a variable for year and a variable for each strain. The value in each cell of the strain variable is the weight for that strain in that year.
+
+### a)
+
+Graph guinea pig weights by year in a line plot (using both line and point geoms).
+
+
+```{r}
+#Read in data
+gpig <- read_csv("data/gpig_dat.csv") %>%
+  pivot_longer(cols = starts_with("strain"),
+               names_to = "strain",
+               values_to = "weight",
+               names_transform = list(strain = function(x) str_remove(x, "strain ")))
+
+#Plot 
+ggplot(data = gpig)+
+  geom_point(aes(x = year, y = weight, color = strain))+
+  geom_line(aes(x = year, y = weight, color = strain, linetype = strain))+
+  scale_color_manual(values = c("B" = "black", "13" = "cornflowerblue"))+
+  labs(title = "Average Weight of Guinea Pigs by Strain 1916-1924", x = "Year", y = "Average weight (lbs)", color = "Strain Type")+
+  theme_bw()+
+  theme(legend.position = "top")+
+  guides(color = guide_legend(title = "Strain Type"),  linetype = guide_legend(title = "Strain Type"))
+  
+
+```
+
+### b)
+
+ Two-sample t-test (equal variances) 
+
+```{r}
+weight_res <- t.test(weight ~ strain, data = gpig, var.equal = TRUE)
+tstat <- round(weight_res$statistic, 3) #test statistic
+
+df <- weight_res$parameter # degrees of freedom
+
+p <- weight_res$p.value %>% round(4) #p value
+
+weight_summary <- tidy(weight_res)
+kable(weight_summary)
+```
+There is no significant difference in mean guinea pig weights between the two guinea pig strains at the 5% significance level (test statistic = `r tstat`, p value = `r p`, df = `r df`)
+
+
+### c)
+
+Permutation Test on Minimum Weight
+
+```{r}
+#Calculate test statistic 
+calculate_ts <- function(df){
+  summary <- df %>%
+    group_by(strain) %>%
+    summarize (min_weight = min(weight))
+  
+  b_weight <- summary %>%
+    filter(strain == "B") %>%
+    pull(min_weight)
+  
+  weight_13 <- summary %>%
+    filter(strain == "13") %>%
+    pull(min_weight)
+  
+  difference <- b_weight - weight_13
+  return(difference)
+}
+
+obs_stat <- calculate_ts (gpig)
+obs_stat
+
+#Create function for permutation 
+permutation_gpig <- function(df){
+  permuted <- df %>%
+    mutate(strain = sample(strain))
+  return(permuted)
+}
+
+permuted <- permutation_gpig(gpig)
+
+#Combine functions for permutation and calclculated test statistic
+permutation_ts <-function(df){
+  permed <- permutation_gpig(df)
+  ts <- calculate_ts(permed)
+  return(ts)
+}
+permutation_ts(gpig)
+
+#Repeat at least 2000 times
+results <- map_dbl(1:9000, function (x) permutation_ts(gpig))
+
+#Put in tibble for graphing
+res_tibble <- tibble(sim_stat = results)
+
+ggplot(data = res_tibble)+
+  geom_histogram(aes(x = sim_stat), bins = 30, fill = "cornflowerblue", color = "black")+
+  geom_vline(aes(xintercept = obs_stat), linetype = "dashed")+
+  theme_bw()
+
+#Calculate p value
+permute_pval <- res_tibble %>%
+  mutate(abs_val_greater = if_else(abs(sim_stat) >= abs(obs_stat), 1,0)) %>%
+  group_by(abs_val_greater) %>%
+  summarize(n_obs = n()) %>%
+  mutate(proportion = n_obs/sum(n_obs)) %>%
+  filter(abs_val_greater == 1) %>%
+  pull(proportion)
+
+permute_pval
+```
+We fail to reject the null hypothesis that the difference between the minimum weights are equal between strains at the 5% level of significance. (p value = `r permute_pval`)
+
+
+
+## Question 3
+
+Six datasets with repeated measures of MIRECC GAF Social Functioning scores for an observational study of individuals with schizophrenia. Each dataset includes a GAF SF measurement at a different follow-up visit. These files are stored in the `data/gaf_files` folder.
+
+### a)
+
+Combine all six datasets using a method that will remove any individuals who are not present in ALL datasets.
+
+
+```{r}
+#Read in datasets
+visit1_data <- read_csv("data/gaf_files/visit_1.csv")
+visit2_data <- read_csv("data/gaf_files/visit_2.csv")
+visit3_data <- read_csv("data/gaf_files/visit_3.csv")
+visit4_data <- read_csv("data/gaf_files/visit_4.csv")
+visit5_data <- read_csv("data/gaf_files/visit_5.csv")
+visit6_data <- read_csv("data/gaf_files/visit_6.csv")
+
+#Join visit 1 and visit 5
+joined_15<- inner_join(visit1_data, visit5_data, by = "patient_id")
+
+#Join visit 3 and visit 4
+joined_34 <- inner_join(visit3_data, visit4_data, by = "study_id")
+
+#Join visit 2 and visit 6
+joined_26 <- inner_join(visit2_data, visit6_data, by = "id")
+
+#Join combined data sets
+joined_1534 <- inner_join(joined_15, joined_34, by = c("patient_id" = "study_id"))
+join_complete <- inner_join(joined_1534, joined_26, by = c("patient_id" = "id")) %>%
+  select(patient_id, site, age, visit_1, visit_2, visit_3, visit_4, visit_5, visit_6)
+
+
+```
+
+### b)
+
+Facet by site + Mean with 95% CL
+
+```{r}
+#Convert data from wide to long format
+gaf_final <- pivot_longer(data = join_complete,
+                         cols = starts_with("visit"), 
+                         names_to = "visit", 
+                         values_to = "gaf_score", 
+                          names_prefix = "visit_") 
+
+#Function to calculate CI
+calculate_ci <- function(var) {
+  if (!is.numeric(var)) {
+    return("Input is non-numeric")
+  }
+  
+  # Compute statistics
+  x_bar <- mean(var)  
+  s <- sd(var)  
+  n <- length(var)  
+  z <- 1.96  
+  
+  # Compute confidence interval bounds
+  margin_error <- z * (s / sqrt(n))
+  ci_lower <- x_bar - margin_error
+  ci_upper <- x_bar + margin_error
+
+  return(c(ci_lower, ci_upper))  
+}
+
+gaf_plot <- gaf_final %>%
+  group_by(site, visit) %>%
+   summarise(
+    mean_score = mean(gaf_score),
+    ci_lower = calculate_ci(gaf_score)[1],  
+    ci_upper = calculate_ci(gaf_score)[2])
+
+
+gaf_2final <- gaf_final %>%
+  left_join(gaf_plot, by = c("site", "visit"))
+
+#Plot
+ggplot(data = gaf_2final ) +
+  geom_line(aes(x = visit, y = gaf_score, group = patient_id), color = "black", alpha = 0.5) +  
+  geom_point(aes(x = visit, y = mean_score), color = "red") +
+  geom_segment(aes(x = visit, y = ci_lower, xend = visit, yend = ci_upper), width = 0.5, color = "red") +
+  facet_wrap(~site) +  
+  labs(title = "GAF Social Functioning by Site",
+       x = "Visit",
+       y = "GAF Score") +
+  theme_bw()
+```
+

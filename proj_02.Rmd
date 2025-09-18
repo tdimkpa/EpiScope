@@ -1,0 +1,336 @@
+---
+title: "Project 02"
+author: "Tobechi Dimkpa"
+date: "February 4th 2025"
+output: 
+ html_document:
+   toc: true
+   toc_float: true
+   
+   
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE) # no need to change these options
+library(tidyverse)
+library(readxl)
+library(janitor)
+```
+
+
+
+## Ramen Ratings
+
+This data was collected from www.theramenrater.com. It provides information on different reviews of ramen products, and has variables: Review #, Brand, Variety, Style, Country, Stars, and Top Ten. 
+
+#### (a)
+
+Read in ramen reviews dataset
+Renamed variables, converted Stars to numeric, and removed invalid entries
+```{r}
+
+ramen2 <- read_csv("data/ramen-ratings.csv")
+
+ramen <- ramen2 %>%
+  rename(review_number = `Review #`, top_ten = `Top Ten` ) %>%
+  mutate(Stars = as.numeric(Stars)) %>%
+  filter(!is.na(Stars))
+
+```
+
+
+#### (c)
+
+Filtering just for the the 'Nissin' ramen brand, calculate the average rating for each country of this brand. 
+
+```{r}
+nissinramen <- ramen %>%
+  filter(Brand == "Nissin") %>%
+  group_by(Country) %>%
+  summarize(avgrating = mean(Stars))
+
+#Brazil has the highest rating while the Philippines has the lowest rating
+```
+
+#### (d)
+
+Created a new variable called "popular" which returns a 1 for entries that have a rating above or equal to 4.5 stars, and 0 for those that don't. 
+
+```{r}
+updatedramen <- ramen %>%
+  mutate(popular= if_else(Stars >= "4.5", "1","0"))
+```
+
+#### (e)
+
+Calculated the average stars for popular and not popular ramen.
+
+```{r}
+averagestars <- updatedramen %>%
+  group_by(popular) %>%
+  summarize(mean_score = mean(Stars))
+print (averagestars)
+# It would be concerning because the rating 4.5 or above means the ramen is classified as popular. An average below 4.5 suggests an error in the data
+```
+
+
+## NYC Airbnb Analysis 
+
+#### (a)
+
+Data preparation.  Note, the neighborhood_group variable refers to borough. 
+
+```{r}
+airbnb <- read_csv("data/AB_NYC_2019.csv")%>%
+ select( host_name, neighbourhood_group, room_type, price, minimum_nights, number_of_reviews)
+
+```
+
+#### (b)
+
+Created a new variable called minimum_price, which combines the minimum nights and price (per night) to give the minimum amount someone could pay to stay at the Airbnb. 
+
+```{r}
+newairbnb <- mutate(airbnb, minimum_price = minimum_nights*price)
+```
+
+#### (c)
+
+Calculated the mean and median minimum_price using 'summarize'. 
+
+```{r}
+summarize(newairbnb, mean(minimum_price), median(minimum_price))
+
+#I expect the data to be right skewed as the mean is greater than the median
+
+airbnbfiltered <- newairbnb %>%
+  filter(minimum_price < 10000)  
+
+ggplot(data = airbnbfiltered) +
+  geom_histogram(aes(x=minimum_price), binwidth = 70)+
+  labs(title = "Histogram of Minimum Price per Night across Airbnbs in NYC")
+#The histogram is right skewed
+```
+
+#### (d)
+
+Borough representation: Are all of the New York City boroughs represented in the data? 
+
+```{r}
+borough <- newairbnb %>%
+  group_by(neighbourhood_group) %>%
+  summarize(boroughtotal = n())
+
+#Yes, all boroughs are represented but Manhattan and Brooklyn account for most of the airbnbs in the city
+```
+
+
+#### (e)
+
+Price Distribution by Borough: Plot a boxplot of price across boroughs, showing only properties less than 1,000 a night. 
+
+```{r}
+newairbnb %>%
+  filter(price < 1000) %>%
+  group_by(neighbourhood_group) %>%
+  ggplot () +
+  geom_boxplot(aes(x=neighbourhood_group, y=price)) +
+  labs(title = "Histogram of Airbnb Prices by Borough")
+#Manhattan seems to have the highest median price and the Bronx has the lowest using the graph
+
+#Confirmation
+newairbnb %>%
+  filter(price < 1000) %>%
+  group_by(neighbourhood_group) %>%
+  summarize(median(price))
+
+#The median price of airbnbs in the different boroughs in nyc is $65 for the Bronx, $90 for Brooklyn, $149 for Manhattan, $75 for Queens and $75 for Staten Island.
+```
+
+#### (f)
+
+Most common Host name
+
+```{r}
+newairbnb%>%
+  group_by(host_name) %>%
+  summarise(n = n()) %>%
+  arrange((-n))
+
+#Michael is the most common host name
+```
+
+
+## Depression drug analysis
+
+#### (a)
+
+Dataset: STUDYDAT12014.csv
+Variables: treatment (trx), placebo, dose, age, HAM-D/HAM-A (baseline & outcome)
+
+```{r}
+depression_drug <- read_csv("data/STUDYDAT12014.csv")
+
+#There are 200 observations and 8 variables
+```
+
+#### (b)
+
+Filtering Midlife Participants (30–39 years old)
+
+```{r}
+midlife <- depression_drug %>%
+  filter(age >= 30 & age < 40)
+
+```
+
+#### (c)
+Relabeling treatment groups: The treatment groups are currently labeled `pbo` and `trx`, but the researchers would like to have them labeled `Placebo` and `Drug 13XA`.  
+
+```{r}
+ midlife <- midlife %>%
+  mutate(trx = if_else(trx == "pbo", "Placebo", "Drug 13XA"))
+```
+
+#### (d)
+
+Calculating score changes: changes between baseline and outcome measurements for HAM-A and HAM-D. 
+
+```{r}
+midlife <- midlife %>%
+  mutate(hamd_diff = outcome_hamd - baseline_hamd, hama_diff = outcome_hama - baseline_hama)
+```
+
+#### (e)
+
+T-tests (unequal variance): Is there is a difference in (1) mean HAM-A changes between treatment groups and (2) mean HAM-D changes between treatment groups. 
+
+
+```{r}
+drug_res <- t.test(hamd_diff~trx, data=midlife)
+
+tstat <- round(drug_res$statistic, 3)
+
+df <- drug_res$parameter # degrees of freedom
+
+p <- drug_res$p.value %>% round(4)
+
+
+drug_res2 <- t.test(hama_diff~trx, data=midlife)
+
+tstat2 <- round(drug_res2$statistic, 3)
+
+df2 <- drug_res2$parameter # degrees of freedom
+
+p2 <- drug_res2$p.value %>% round(4)
+```
+HAM-A T-test: As the p-value is greater than 0.05, we fail to reject the null hypothesis; the data does not support that there is a significant difference in mean HAM-A changes between treatment groups. (t = `r tstat2`; df = `r df2``; p = `r p2`)
+
+HAM-D T-test: As the p-value is greater than 0.05, we fail to reject the null hypothesis; the data does not support that there is a significant difference in mean HAM-D changes between treatment groups. (t = `r tstat`; df = `r df`; p = `r p`)
+
+
+## Cafe Sales Analysis
+
+#### (a) 
+
+Profitability and Summary Stats: dataset from a student-run cafe `cafedata.xls`. This dataset contains data from a cafe, called Executive Express, run by undergraduate business students at a Midwestern public university. It was collected over a ten-week period from January to April 2010.  
+
+```{r}
+#Import data, drop missing variables and create profitable variable
+
+cafedata <- read_excel("data/cafedata.xls", sheet = 2) %>%
+  drop_na() %>%
+  mutate(profitable_days = if_else(Sales >= 160, "profitable", "unprofitable"))
+
+#Create summary dataframe to find how many profitable/unprofitable days
+cafe_summary <- cafedata %>%
+ count(profitable_days)
+profitable_count <- cafe_summary %>% filter(profitable_days == "profitable") %>% pull(n)
+unprofitable_count <- cafe_summary %>% filter(profitable_days == "unprofitable") %>% pull(n)
+
+#Summarize Wraps Sold
+wraps_summary <- cafedata %>%
+  group_by(profitable_days) %>%
+  summarize(mean_wraps = mean(`Wraps Sold`), sd_wraps = sd(`Wraps Sold`))
+
+wraps_profitable <- wraps_summary %>% filter(profitable_days == "profitable") %>% pull(mean_wraps)
+sd_profitable <- wraps_summary %>% filter(profitable_days == "profitable") %>% pull(sd_wraps)
+
+wraps_unprofitable <- wraps_summary %>% filter(profitable_days == "unprofitable") %>% pull(mean_wraps)
+sd_unprofitable <- wraps_summary %>% filter(profitable_days == "unprofitable") %>% pull(sd_wraps)
+
+
+#Create new variable for muffins and cookies
+cafedata <- cafedata %>%
+  mutate(mookie_total = `Muffins Sold` + `Cookies Sold`) 
+
+#Summarize Mookie Sold
+mookie_summary <- cafedata %>%
+  group_by(profitable_days) %>%
+  summarize(mean_mookie= mean(`mookie_total`), sd_mookie= sd(`mookie_total`))
+
+mookie_profitable <- mookie_summary %>% filter(profitable_days == "profitable") %>% pull(mean_mookie)
+msd_profitable <- mookie_summary %>% filter(profitable_days == "profitable") %>% pull(sd_mookie)
+
+mookie_unprofitable <- mookie_summary %>% filter(profitable_days == "unprofitable") %>% pull(mean_mookie)
+msd_unprofitable <- mookie_summary %>% filter(profitable_days == "unprofitable") %>% pull(sd_mookie)
+
+#Summarize Coffee Sold
+coffee_summary <- cafedata %>%
+  group_by(profitable_days) %>%
+  summarize(mean_coffee= mean(`Coffees`), sd_coffee= sd(`Coffees`))
+
+coffee_profitable <- coffee_summary %>% filter(profitable_days == "profitable") %>% pull(mean_coffee)
+csd_profitable <- coffee_summary %>% filter(profitable_days == "profitable") %>% pull(sd_coffee)
+
+coffee_unprofitable <- coffee_summary %>% filter(profitable_days == "unprofitable") %>% pull(mean_coffee)
+csd_unprofitable <- coffee_summary %>% filter(profitable_days == "unprofitable") %>% pull(sd_coffee)
+
+#T test for Coffee Sold
+coffee_res <- t.test(Coffees ~ profitable_days, data=cafedata)
+
+c_tstat <- round(coffee_res$statistic, 3)
+
+c_df <- coffee_res$parameter # degrees of freedom
+
+c_p <- coffee_res$p.value %>% round(4)
+
+#T test for Wraps Sold
+wraps_res <- t.test(`Wraps Sold` ~ profitable_days, data=cafedata)
+
+w_tstat <- round(wraps_res$statistic, 3)
+
+w_df <- wraps_res$parameter # degrees of freedom
+
+w_p <- wraps_res$p.value %>% round(4)
+
+#T test for Muffins and Cookies Sold
+mookie_res <- t.test(mookie_total ~ profitable_days, data=cafedata)
+
+m_tstat <- round(mookie_res$statistic, 3)
+
+m_df <- mookie_res$parameter # degrees of freedom
+
+m_p <- mookie_res$p.value %>% round(4)
+```
+Students called a day a 'profitable day', when they had at least $160 in sales. There were `r profitable_count` 'profitable' days and `r unprofitable_count` 'unprofitable' days. 
+
+On 'profitable' days, the mean number of wraps sold was `r wraps_profitable` with a standard deviation of `r sd_profitable`. On 'unprofitable' days, the mean number of wraps sold was `r wraps_unprofitable` with a standard deviation of `r sd_unprofitable`. 
+
+On 'profitable days', on average they sold `r mookie_profitable` muffins and cookies combined, with a standard deviation of `r msd_profitable`. On 'unprofitable days', on average they sold `r mookie_unprofitable` muffins and cookies combined, with a standard deviation of `r msd_unprofitable`. 
+
+The mean number of coffees sold on 'profitable' days was `r coffee_profitable` with a standard deviation of `r csd_profitable` and the mean number of coffees sold on 'unprofitable' days was `r coffee_unprofitable` with a standard deviation of `r csd_unprofitable`. 
+
+When comparing profitable to nonprofitable days, there was a significant difference in coffee sold (p-value = `r c_p`, t=`r c_tstat`, df=`r c_df`), and in wraps sold (p-value = `r w_p`, t=`r w_tstat`, df=`r w_df`). However, the sales of muffins and cookies did not significantly differ between profitable and nonprofitable days (p-value = `r m_p`, t=`r m_tstat`, df=`r m_df`), at a level of significance of 5%.
+
+#### (b)
+
+Coffee Sales by Day of Week
+```{r}
+cafedata %>%
+  mutate(`Day of Week` = factor(`Day of Week`, levels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))) %>%
+  ggplot() +
+  geom_boxplot(aes(x = `Day of Week`, y = `Coffees`)) + 
+  labs(title = "Distribution of Coffee Sales by Day")
+```
+

@@ -1,0 +1,152 @@
+---
+title: "Project 4"
+author: "Tobechi Dimkpa"
+date: "February 17 2025"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(readxl)
+library(knitr)
+library(janitor)
+library(gtsummary)
+```
+
+
+
+# Depression study analysis
+
+ This study had two active treatments and a control group over 10 weeks. The main outcome of interest was the PHQ-9 sum score, which can range from 0-27. The data is stored in the `depression_study.csv` file. 
+
+### a)
+
+During a meeting with your colleague they sketch out a graph they would like you to make for an upcoming poster session. Your colleague does not know exactly what the data will look like, but has a general idea of the graph they want. The picture they sketched, along with some notes, is included below in the `graph-sketch.jpg` file. Take a look at it by clicking on it in the file explorer in the lower right hand section of RStudio. 
+
+Important things to notice:*
+(1) Your colleague is interested in mean PHQ-9 by treatment by day. 
+(2) Your colleague wants the x and y axis to have specific ranges, tick marks, and labels. 
+(3) Your colleague wants the colors of the three treatments to be different.
+(4) Your colleague wants the points that represent the three treatments to be different as well -- squares, circles, and triangles.
+(5) Your colleague wants the legend below the plot.
+
+
+```{r}
+#Read in the dataset
+depression_study <- read_csv("data/depression_study.csv") 
+
+#Create mean by treatment
+depression <- depression_study %>%
+  group_by(treatment, week) %>%
+  mutate(mean_phq9 = mean(phq9))
+
+#Create the plot
+ggplot(depression, aes(x = week, y = mean_phq9, color= treatment, shape = treatment, group = treatment)) +
+  geom_point() +  
+  geom_line() +   # Lines to connect the points
+  scale_x_continuous(breaks = seq(1, 10, by = 1), labels = paste0("Week ", seq(1, 10, by = 1))) +  # Custom X-axis labels
+  scale_y_continuous(breaks = seq(0, 27, by = 3), limits = c(0, 27)) +  # Custom Y-axis
+  scale_color_manual(values = c("red", "#9ebcda", "#8856a7")) +  # Different colors for treatments
+  theme_bw() + 
+  theme(legend.position = "bottom") + # Move legend to bottom
+  guides(color = guide_legend(title = "Treatment"),  shape = guide_legend(title = "Treatment"))+ # Ensures color and shape are in one legend
+  labs(title = "Observed PHQ-9 by Treatment Group", x = "Week", y = "Mean PHQ-9", color = "Treatment")
+```
+
+# Biometrics data analysis
+
+### a)
+
+Use the `tbl_summary()` function from the `gtsummary` package to create a descriptive table summarizing all the **girth** measurements from the biometrics dataset (`biometrics.xls`). 
+
+```{r, results='asis'}
+biometrics_raw <- read_xls("data/biometrics.xls", sheet = 2) 
+
+biometrics <- biometrics_raw %>%
+  select(contains("girth"))  %>%
+  tbl_summary(statistic = list(all_continuous() ~ "{mean} ({sd}) | Min: {min} | Median: {median} | Max: {max}"),
+  label = list(
+      shoulder_girth ~ "Shoulder Girth",
+      chest_girth ~ "Chest Girth",
+      waist_girth ~ "Waist Girth",
+      navel_girth ~ "Navel Girth",
+      hip_girth ~ "Hip Girth",
+      thigh_girth ~ "Thigh Girth",
+      bicep_girth_flexed ~ "Bicep Girth (Flexed)",
+      forearm_girth ~ "Forearm Girth",
+      knee_girth ~ "Knee Girth",
+      calf_girth ~ "Calf Girth",
+      ankle_girth ~ "Ankle Girth",
+      wrist_girth ~ "Wrist Girth"
+    ))
+print(biometrics)
+
+
+```
+
+### b)
+
+Split  descriptive table from above by gender.
+
+
+```{r, results='asis'}
+biometrics <- biometrics_raw %>%
+  select(gender, contains("girth"))  %>%
+  tbl_summary(by = gender,
+    statistic = list(all_continuous() ~ "{mean} ({sd}) | Min: {min} | Median: {median} | Max: {max}"),
+  label = list(
+      shoulder_girth ~ "Shoulder Girth",
+      chest_girth ~ "Chest Girth",
+      waist_girth ~ "Waist Girth",
+      navel_girth ~ "Navel Girth",
+      hip_girth ~ "Hip Girth",
+      thigh_girth ~ "Thigh Girth",
+      bicep_girth_flexed ~ "Bicep Girth (Flexed)",
+      forearm_girth ~ "Forearm Girth",
+      knee_girth ~ "Knee Girth",
+      calf_girth ~ "Calf Girth",
+      ankle_girth ~ "Ankle Girth",
+      wrist_girth ~ "Wrist Girth"
+    ))
+print(biometrics)
+```
+
+### c)
+
+Test for mean differences by gender using t-tests that assume equal variances. 
+
+```{r, results='asis'}
+biometrics <- biometrics_raw %>%
+  select(gender, contains("girth"))  %>%
+  tbl_summary(by = gender,
+    statistic = list(all_continuous() ~ "{mean} ({sd}) | Min: {min} | Median: {median} | Max: {max}"),
+  label = list(
+      shoulder_girth ~ "Shoulder Girth",
+      chest_girth ~ "Chest Girth",
+      waist_girth ~ "Waist Girth",
+      navel_girth ~ "Navel Girth",
+      hip_girth ~ "Hip Girth",
+      thigh_girth ~ "Thigh Girth",
+      bicep_girth_flexed ~ "Bicep Girth (Flexed)",
+      forearm_girth ~ "Forearm Girth",
+      knee_girth ~ "Knee Girth",
+      calf_girth ~ "Calf Girth",
+      ankle_girth ~ "Ankle Girth",
+      wrist_girth ~ "Wrist Girth"
+    )) %>%
+  
+add_p(test = all_continuous()~"t.test",
+      test.args = all_tests("t.test") ~ list(var.equal= TRUE)) #Add column to test for mean differences assuming equal variance
+
+print(biometrics)
+
+```
+
+### d)
+
+
+Shoulder girth, chest girth, waist girth, navel girth, hip girth, bicep girth (flexed), forearm girth, knee girth, calf girth, ankle girth, and wrist girth were all significantly different between the genders (p < 0.001 for all).
